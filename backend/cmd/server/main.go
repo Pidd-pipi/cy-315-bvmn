@@ -87,7 +87,13 @@ func openDatabase(path string) (*gorm.DB, error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return nil, fmt.Errorf("create db dir: %w", err)
 	}
-	db, err := gorm.Open(sqlite.Open(path), &gorm.Config{
+	// WAL lets readers and the single writer coexist. busy_timeout plus
+	// BEGIN IMMEDIATE (_txlock=immediate) make concurrent publish
+	// transactions queue for the write lock; after the winner commits they
+	// observe status=published and fail cleanly instead of SQLITE_BUSY
+	// deadlocks caused by upgrading shared locks.
+	dsn := path + "?_txlock=immediate&_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=foreign_keys(ON)"
+	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{
 		Logger:         gormlogger.Default.LogMode(gormlogger.Silent),
 		TranslateError: true,
 	})
@@ -106,6 +112,9 @@ func migrate(db *gorm.DB) error {
 		&model.TimeSlot{},
 		&model.Schedule{},
 		&model.AdjustmentLog{},
+		&model.ScheduleDraft{},
+		&model.ScheduleDraftItem{},
+		&model.SchedulePublishRecord{},
 	); err != nil {
 		return fmt.Errorf("auto migrate: %w", err)
 	}
@@ -120,6 +129,7 @@ func newApp(db *gorm.DB, logger *slog.Logger) (*gin.Engine, error) {
 	timeSlotRepo := repository.NewTimeSlotRepository(db)
 	scheduleRepo := repository.NewScheduleRepository(db)
 	adjustmentRepo := repository.NewAdjustmentLogRepository(db)
+	draftRepo := repository.NewScheduleDraftRepository(db)
 
 	classroomService := service.NewClassroomService(classroomRepo, logger)
 	teacherService := service.NewTeacherService(teacherRepo, logger)
@@ -127,15 +137,17 @@ func newApp(db *gorm.DB, logger *slog.Logger) (*gin.Engine, error) {
 	courseService := service.NewCourseService(courseRepo, logger)
 	timeSlotService := service.NewTimeSlotService(timeSlotRepo, logger)
 	scheduleService := service.NewScheduleService(scheduleRepo, classroomRepo, teacherRepo, classRepo, courseRepo, timeSlotRepo, adjustmentRepo, logger)
+	draftService := service.NewScheduleDraftService(draftRepo, scheduleRepo, classroomRepo, teacherRepo, classRepo, courseRepo, timeSlotRepo, logger)
 
 	h := router.Handlers{
-		Classroom:  handler.NewClassroomHandler(classroomService, logger),
-		Teacher:    handler.NewTeacherHandler(teacherService, logger),
-		Class:      handler.NewClassHandler(classService, logger),
-		Course:     handler.NewCourseHandler(courseService, logger),
-		TimeSlot:   handler.NewTimeSlotHandler(timeSlotService, logger),
-		Schedule:   handler.NewScheduleHandler(scheduleService, logger),
-		Statistics: handler.NewStatisticsHandler(scheduleService, logger),
+		Classroom:     handler.NewClassroomHandler(classroomService, logger),
+		Teacher:       handler.NewTeacherHandler(teacherService, logger),
+		Class:         handler.NewClassHandler(classService, logger),
+		Course:        handler.NewCourseHandler(courseService, logger),
+		TimeSlot:      handler.NewTimeSlotHandler(timeSlotService, logger),
+		Schedule:      handler.NewScheduleHandler(scheduleService, logger),
+		ScheduleDraft: handler.NewScheduleDraftHandler(draftService, logger),
+		Statistics:    handler.NewStatisticsHandler(scheduleService, logger),
 	}
 	return router.New(h, logger), nil
 }

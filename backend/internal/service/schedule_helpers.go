@@ -79,7 +79,7 @@ func requirementCourseIDs(requirements []dto.CourseRequirement) []uint {
 
 func (s *scheduleService) resolveClasses(ctx context.Context, req *dto.GenerateScheduleRequest) ([]model.Class, error) {
 	if len(req.ClassIDs) > 0 {
-		items, err := s.classes.GetByIDs(ctx, req.ClassIDs)
+		items, err := s.entities.classes.GetByIDs(ctx, req.ClassIDs)
 		if err != nil {
 			return nil, fmt.Errorf("load requested classes: %w", err)
 		}
@@ -92,13 +92,13 @@ func (s *scheduleService) resolveClasses(ctx context.Context, req *dto.GenerateS
 		}
 	}
 	if len(ids) > 0 {
-		items, err := s.classes.GetByIDs(ctx, ids)
+		items, err := s.entities.classes.GetByIDs(ctx, ids)
 		if err != nil {
 			return nil, fmt.Errorf("load requirement classes: %w", err)
 		}
 		return items, nil
 	}
-	items, _, err := s.classes.List(ctx, 1, constants.MaxPageSize)
+	items, _, err := s.entities.classes.List(ctx, 1, constants.MaxPageSize)
 	if err != nil {
 		return nil, fmt.Errorf("load all classes: %w", err)
 	}
@@ -107,7 +107,7 @@ func (s *scheduleService) resolveClasses(ctx context.Context, req *dto.GenerateS
 
 func (s *scheduleService) resolveTeachers(ctx context.Context, req *dto.GenerateScheduleRequest) ([]model.Teacher, error) {
 	if len(req.TeacherIDs) > 0 {
-		items, err := s.teachers.GetByIDs(ctx, req.TeacherIDs)
+		items, err := s.entities.teachers.GetByIDs(ctx, req.TeacherIDs)
 		if err != nil {
 			return nil, fmt.Errorf("load requested teachers: %w", err)
 		}
@@ -120,13 +120,13 @@ func (s *scheduleService) resolveTeachers(ctx context.Context, req *dto.Generate
 		}
 	}
 	if len(ids) > 0 {
-		items, err := s.teachers.GetByIDs(ctx, ids)
+		items, err := s.entities.teachers.GetByIDs(ctx, ids)
 		if err != nil {
 			return nil, fmt.Errorf("load requirement teachers: %w", err)
 		}
 		return items, nil
 	}
-	items, _, err := s.teachers.List(ctx, 1, constants.MaxPageSize)
+	items, _, err := s.entities.teachers.List(ctx, 1, constants.MaxPageSize)
 	if err != nil {
 		return nil, fmt.Errorf("load all teachers: %w", err)
 	}
@@ -135,13 +135,13 @@ func (s *scheduleService) resolveTeachers(ctx context.Context, req *dto.Generate
 
 func (s *scheduleService) resolveClassrooms(ctx context.Context, req *dto.GenerateScheduleRequest) ([]model.Classroom, error) {
 	if len(req.ClassroomIDs) > 0 {
-		items, err := s.classrooms.GetByIDs(ctx, req.ClassroomIDs)
+		items, err := s.entities.classrooms.GetByIDs(ctx, req.ClassroomIDs)
 		if err != nil {
 			return nil, fmt.Errorf("load requested classrooms: %w", err)
 		}
 		return items, nil
 	}
-	items, _, err := s.classrooms.List(ctx, 1, constants.MaxPageSize)
+	items, _, err := s.entities.classrooms.List(ctx, 1, constants.MaxPageSize)
 	if err != nil {
 		return nil, fmt.Errorf("load all classrooms: %w", err)
 	}
@@ -395,42 +395,6 @@ func enrichSchedules(items []model.Schedule, slots map[uint]model.TimeSlot, clas
 		})
 	}
 	return out
-}
-
-func (s *scheduleService) classroomMap(ctx context.Context, items []model.Schedule) (map[uint]model.Classroom, error) {
-	ids := uniqueClassroomIDs(items)
-	list, err := s.classrooms.GetByIDs(ctx, ids)
-	if err != nil {
-		return nil, err
-	}
-	return entityMap(list, func(c model.Classroom) uint { return c.ID }), nil
-}
-
-func (s *scheduleService) teacherMap(ctx context.Context, items []model.Schedule) (map[uint]model.Teacher, error) {
-	ids := uniqueTeacherIDs(items)
-	list, err := s.teachers.GetByIDs(ctx, ids)
-	if err != nil {
-		return nil, err
-	}
-	return entityMap(list, func(t model.Teacher) uint { return t.ID }), nil
-}
-
-func (s *scheduleService) classMap(ctx context.Context, items []model.Schedule) (map[uint]model.Class, error) {
-	ids := uniqueClassIDs(items)
-	list, err := s.classes.GetByIDs(ctx, ids)
-	if err != nil {
-		return nil, err
-	}
-	return entityMap(list, func(c model.Class) uint { return c.ID }), nil
-}
-
-func (s *scheduleService) courseMap(ctx context.Context, items []model.Schedule) (map[uint]model.Course, error) {
-	ids := uniqueUint(items, func(s model.Schedule) uint { return s.CourseID })
-	list, err := s.courses.GetByIDs(ctx, ids)
-	if err != nil {
-		return nil, err
-	}
-	return entityMap(list, func(c model.Course) uint { return c.ID }), nil
 }
 
 func maxDayOfWeek(items []model.Schedule) int {

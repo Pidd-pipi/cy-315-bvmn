@@ -30,11 +30,7 @@ type ScheduleService interface {
 
 type scheduleService struct {
 	schedules   repository.ScheduleRepository
-	classrooms  repository.ClassroomRepository
-	teachers    repository.TeacherRepository
-	classes     repository.ClassRepository
-	courses     repository.CourseRepository
-	timeSlots   repository.TimeSlotRepository
+	entities    scheduleEntities
 	adjustments repository.AdjustmentLogRepository
 	logger      *slog.Logger
 }
@@ -52,11 +48,7 @@ func NewScheduleService(
 ) ScheduleService {
 	return &scheduleService{
 		schedules:   schedules,
-		classrooms:  classrooms,
-		teachers:    teachers,
-		classes:     classes,
-		courses:     courses,
-		timeSlots:   timeSlots,
+		entities:    newScheduleEntities(classrooms, teachers, classes, courses, timeSlots),
 		adjustments: adjustments,
 		logger:      logger,
 	}
@@ -64,7 +56,7 @@ func NewScheduleService(
 
 // Generate creates a timetable with a greedy scheduling algorithm.
 func (s *scheduleService) Generate(ctx context.Context, req *dto.GenerateScheduleRequest) (*dto.GenerateScheduleResponse, error) {
-	allSlots, _, err := s.timeSlots.List(ctx, 1, constants.MaxPageSize)
+	allSlots, _, err := s.entities.timeSlots.List(ctx, 1, constants.MaxPageSize)
 	if err != nil {
 		return nil, fmt.Errorf("load time slots: %w", err)
 	}
@@ -73,7 +65,7 @@ func (s *scheduleService) Generate(ctx context.Context, req *dto.GenerateSchedul
 	}
 	slots := allSlots[:req.PeriodsPerDay]
 
-	courses, err := s.courses.GetByIDs(ctx, requirementCourseIDs(req.Courses))
+	courses, err := s.entities.courses.GetByIDs(ctx, requirementCourseIDs(req.Courses))
 	if err != nil {
 		return nil, fmt.Errorf("load courses: %w", err)
 	}
@@ -162,7 +154,7 @@ func (s *scheduleService) Generate(ctx context.Context, req *dto.GenerateSchedul
 		return nil, fmt.Errorf("check generated conflicts: %w", err)
 	}
 
-	responses, err := s.enrichSchedules(ctx, allSchedules)
+	responses, err := s.entities.enrichSchedules(ctx, allSchedules)
 	if err != nil {
 		return nil, fmt.Errorf("enrich schedules: %w", err)
 	}
@@ -181,7 +173,7 @@ func (s *scheduleService) List(ctx context.Context, week, classID, teacherID, cl
 	if err != nil {
 		return nil, fmt.Errorf("list schedules: %w", err)
 	}
-	return s.enrichSchedules(ctx, items)
+	return s.entities.enrichSchedules(ctx, items)
 }
 
 func (s *scheduleService) Get(ctx context.Context, id uint) (*dto.ScheduleResponse, error) {
@@ -192,7 +184,7 @@ func (s *scheduleService) Get(ctx context.Context, id uint) (*dto.ScheduleRespon
 		}
 		return nil, fmt.Errorf("get schedule: %w", err)
 	}
-	responses, err := s.enrichSchedules(ctx, []model.Schedule{*item})
+	responses, err := s.entities.enrichSchedules(ctx, []model.Schedule{*item})
 	if err != nil {
 		return nil, err
 	}
@@ -207,7 +199,11 @@ func (s *scheduleService) CheckConflicts(ctx context.Context) ([]dto.ConflictRes
 	if err != nil {
 		return nil, fmt.Errorf("list schedules for conflict check: %w", err)
 	}
-	return s.detectConflicts(ctx, items), nil
+	conflicts, err := s.entities.detectConflicts(ctx, items)
+	if err != nil {
+		return nil, err
+	}
+	return conflicts, nil
 }
 
 func (s *scheduleService) Swap(ctx context.Context, req *dto.SwapScheduleRequest) (*dto.AdjustmentResponse, error) {
@@ -239,7 +235,7 @@ func (s *scheduleService) Swap(ctx context.Context, req *dto.SwapScheduleRequest
 	if err != nil {
 		return nil, err
 	}
-	responses, err := s.enrichSchedules(ctx, []model.Schedule{*a})
+	responses, err := s.entities.enrichSchedules(ctx, []model.Schedule{*a})
 	if err != nil {
 		return nil, err
 	}
@@ -269,7 +265,7 @@ func (s *scheduleService) Move(ctx context.Context, req *dto.MoveScheduleRequest
 	if err != nil {
 		return nil, err
 	}
-	responses, err := s.enrichSchedules(ctx, []model.Schedule{*item})
+	responses, err := s.entities.enrichSchedules(ctx, []model.Schedule{*item})
 	if err != nil {
 		return nil, err
 	}
@@ -299,7 +295,7 @@ func (s *scheduleService) ListAdjustments(ctx context.Context, page, pageSize in
 }
 
 func (s *scheduleService) ClassroomUtilization(ctx context.Context) ([]dto.ClassroomUtilizationItem, error) {
-	classrooms, _, err := s.classrooms.List(ctx, 1, constants.MaxPageSize)
+	classrooms, _, err := s.entities.classrooms.List(ctx, 1, constants.MaxPageSize)
 	if err != nil {
 		return nil, fmt.Errorf("list classrooms: %w", err)
 	}
@@ -309,7 +305,7 @@ func (s *scheduleService) ClassroomUtilization(ctx context.Context) ([]dto.Class
 	}
 	weeks := distinctWeeks(schedules)
 	days := maxDayOfWeek(schedules)
-	slots, _, err := s.timeSlots.List(ctx, 1, constants.MaxPageSize)
+	slots, _, err := s.entities.timeSlots.List(ctx, 1, constants.MaxPageSize)
 	if err != nil {
 		return nil, fmt.Errorf("list time slots: %w", err)
 	}
@@ -337,7 +333,7 @@ func (s *scheduleService) ClassroomUtilization(ctx context.Context) ([]dto.Class
 }
 
 func (s *scheduleService) TeacherWorkload(ctx context.Context) ([]dto.TeacherWorkloadItem, error) {
-	teachers, _, err := s.teachers.List(ctx, 1, constants.MaxPageSize)
+	teachers, _, err := s.entities.teachers.List(ctx, 1, constants.MaxPageSize)
 	if err != nil {
 		return nil, fmt.Errorf("list teachers: %w", err)
 	}
@@ -393,108 +389,4 @@ func (s *scheduleService) recordAdjustment(ctx context.Context, scheduleID uint,
 		return 0, fmt.Errorf("record adjustment: %w", err)
 	}
 	return log.ID, nil
-}
-
-func (s *scheduleService) enrichSchedules(ctx context.Context, items []model.Schedule) ([]dto.ScheduleResponse, error) {
-	timeSlots, _, err := s.timeSlots.List(ctx, 1, constants.MaxPageSize)
-	if err != nil {
-		return nil, fmt.Errorf("load time slots: %w", err)
-	}
-	slotMap := map[uint]model.TimeSlot{}
-	for i := range timeSlots {
-		slotMap[timeSlots[i].ID] = timeSlots[i]
-	}
-	classroomMap, err := s.classroomMap(ctx, items)
-	if err != nil {
-		return nil, err
-	}
-	teacherMap, err := s.teacherMap(ctx, items)
-	if err != nil {
-		return nil, err
-	}
-	classMap, err := s.classMap(ctx, items)
-	if err != nil {
-		return nil, err
-	}
-	courseMap, err := s.courseMap(ctx, items)
-	if err != nil {
-		return nil, err
-	}
-	return enrichSchedules(items, slotMap, classroomMap, teacherMap, classMap, courseMap), nil
-}
-
-func (s *scheduleService) detectConflicts(ctx context.Context, items []model.Schedule) []dto.ConflictResponse {
-	var conflicts []dto.ConflictResponse
-	teacherSlots := map[string]model.Schedule{}
-	classSlots := map[string]model.Schedule{}
-	classroomSlots := map[string]model.Schedule{}
-
-	classes, _ := s.classes.GetByIDs(ctx, uniqueClassIDs(items))
-	classroomList, _ := s.classrooms.GetByIDs(ctx, uniqueClassroomIDs(items))
-	teacherList, _ := s.teachers.GetByIDs(ctx, uniqueTeacherIDs(items))
-	slotList, _, _ := s.timeSlots.List(ctx, 1, constants.MaxPageSize)
-
-	classMap := map[uint]model.Class{}
-	for i := range classes {
-		classMap[classes[i].ID] = classes[i]
-	}
-	classroomMap := map[uint]model.Classroom{}
-	for i := range classroomList {
-		classroomMap[classroomList[i].ID] = classroomList[i]
-	}
-	teacherMap := map[uint]model.Teacher{}
-	for i := range teacherList {
-		teacherMap[teacherList[i].ID] = teacherList[i]
-	}
-	slotMap := map[uint]model.TimeSlot{}
-	for i := range slotList {
-		slotMap[slotList[i].ID] = slotList[i]
-	}
-
-	for _, item := range items {
-		slotKey := fmt.Sprintf("%d-%d-%d", item.Week, item.DayOfWeek, item.TimeSlotID)
-		if existing, ok := teacherSlots[slotKey+"-t-"+fmt.Sprint(item.TeacherID)]; ok && existing.ID != item.ID {
-			conflicts = append(conflicts, dto.ConflictResponse{
-				Type: constants.ConflictTeacherTime, EntityType: "teacher", EntityID: item.TeacherID,
-				EntityName: teacherMap[item.TeacherID].Name, Week: item.Week, DayOfWeek: item.DayOfWeek, TimeSlotID: item.TimeSlotID,
-				Suggestion: fmt.Sprintf("teacher already has a lesson at week %d day %d slot %d; move one of the lessons", item.Week, item.DayOfWeek, item.TimeSlotID),
-			})
-		}
-		if existing, ok := classSlots[slotKey+"-c-"+fmt.Sprint(item.ClassID)]; ok && existing.ID != item.ID {
-			conflicts = append(conflicts, dto.ConflictResponse{
-				Type: constants.ConflictClassTime, EntityType: "class", EntityID: item.ClassID,
-				EntityName: classMap[item.ClassID].Name, Week: item.Week, DayOfWeek: item.DayOfWeek, TimeSlotID: item.TimeSlotID,
-				Suggestion: fmt.Sprintf("class already has a lesson at week %d day %d slot %d; move one of the lessons", item.Week, item.DayOfWeek, item.TimeSlotID),
-			})
-		}
-		if existing, ok := classroomSlots[slotKey+"-r-"+fmt.Sprint(item.ClassroomID)]; ok && existing.ID != item.ID {
-			conflicts = append(conflicts, dto.ConflictResponse{
-				Type: constants.ConflictClassroomTime, EntityType: "classroom", EntityID: item.ClassroomID,
-				EntityName: classroomMap[item.ClassroomID].Name, Week: item.Week, DayOfWeek: item.DayOfWeek, TimeSlotID: item.TimeSlotID,
-				Suggestion: fmt.Sprintf("classroom already has a lesson at week %d day %d slot %d; move one of the lessons", item.Week, item.DayOfWeek, item.TimeSlotID),
-			})
-		}
-		if class, ok := classMap[item.ClassID]; ok {
-			if classroom, ok2 := classroomMap[item.ClassroomID]; ok2 && class.StudentCount > classroom.Capacity {
-				conflicts = append(conflicts, dto.ConflictResponse{
-					Type: constants.ConflictClassroomCap, EntityType: "class", EntityID: item.ClassID,
-					EntityName: class.Name, Week: item.Week, DayOfWeek: item.DayOfWeek, TimeSlotID: item.TimeSlotID,
-					Suggestion: fmt.Sprintf("class size %d exceeds classroom capacity %d; choose a larger classroom", class.StudentCount, classroom.Capacity),
-				})
-			}
-		}
-		if teacher, ok := teacherMap[item.TeacherID]; ok {
-			if slot, ok2 := slotMap[item.TimeSlotID]; ok2 && contains(teacher.UnavailableSlots, slot.Code) {
-				conflicts = append(conflicts, dto.ConflictResponse{
-					Type: constants.ConflictTeacherPref, EntityType: "teacher", EntityID: item.TeacherID,
-					EntityName: teacher.Name, Week: item.Week, DayOfWeek: item.DayOfWeek, TimeSlotID: item.TimeSlotID,
-					Suggestion: fmt.Sprintf("slot %s is in the teacher's unavailable periods; choose another time", slot.Code),
-				})
-			}
-		}
-		teacherSlots[slotKey+"-t-"+fmt.Sprint(item.TeacherID)] = item
-		classSlots[slotKey+"-c-"+fmt.Sprint(item.ClassID)] = item
-		classroomSlots[slotKey+"-r-"+fmt.Sprint(item.ClassroomID)] = item
-	}
-	return conflicts
 }

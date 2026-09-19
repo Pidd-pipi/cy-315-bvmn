@@ -483,6 +483,235 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/schedule-drafts": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "schedule-drafts"
+                ],
+                "summary": "List named timetable drafts",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "page",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "page size",
+                        "name": "page_size",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_gbschedule_gbschedule_internal_dto.Response"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "schedule-drafts"
+                ],
+                "summary": "Save the current timetable as a named draft",
+                "parameters": [
+                    {
+                        "description": "draft payload",
+                        "name": "input",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/github_com_gbschedule_gbschedule_internal_dto.CreateScheduleDraftRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_gbschedule_gbschedule_internal_dto.Response"
+                        }
+                    },
+                    "409": {
+                        "description": "draft name already exists",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_gbschedule_gbschedule_internal_dto.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/schedule-drafts/{id}": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "schedule-drafts"
+                ],
+                "summary": "Get a draft with its full snapshot",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "draft id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_gbschedule_gbschedule_internal_dto.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "draft not found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_gbschedule_gbschedule_internal_dto.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/schedule-drafts/{id}/conflicts": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "schedule-drafts"
+                ],
+                "summary": "Check conflicts inside a draft",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "draft id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_gbschedule_gbschedule_internal_dto.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "draft not found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_gbschedule_gbschedule_internal_dto.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/schedule-drafts/{id}/publish": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "schedule-drafts"
+                ],
+                "summary": "Publish a draft and atomically replace the current timetable",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "draft id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "publish payload",
+                        "name": "input",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/github_com_gbschedule_gbschedule_internal_dto.PublishScheduleDraftRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_gbschedule_gbschedule_internal_dto.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "draft not found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_gbschedule_gbschedule_internal_dto.Response"
+                        }
+                    },
+                    "409": {
+                        "description": "conflicts present, already published or concurrent publish",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_gbschedule_gbschedule_internal_dto.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/schedule-publishes": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "schedule-drafts"
+                ],
+                "summary": "List publish audit records",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "filter by draft id",
+                        "name": "draft_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "page",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "page size",
+                        "name": "page_size",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_gbschedule_gbschedule_internal_dto.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/schedules": {
             "get": {
                 "produces": [
@@ -1226,6 +1455,23 @@ const docTemplate = `{
                 }
             }
         },
+        "github_com_gbschedule_gbschedule_internal_dto.CreateScheduleDraftRequest": {
+            "type": "object",
+            "required": [
+                "name"
+            ],
+            "properties": {
+                "created_by": {
+                    "type": "string",
+                    "maxLength": 64
+                },
+                "name": {
+                    "type": "string",
+                    "maxLength": 128,
+                    "minLength": 1
+                }
+            }
+        },
         "github_com_gbschedule_gbschedule_internal_dto.CreateTeacherRequest": {
             "type": "object",
             "required": [
@@ -1368,6 +1614,19 @@ const docTemplate = `{
                 "week": {
                     "type": "integer",
                     "minimum": 1
+                }
+            }
+        },
+        "github_com_gbschedule_gbschedule_internal_dto.PublishScheduleDraftRequest": {
+            "type": "object",
+            "required": [
+                "published_by"
+            ],
+            "properties": {
+                "published_by": {
+                    "type": "string",
+                    "maxLength": 64,
+                    "minLength": 1
                 }
             }
         },

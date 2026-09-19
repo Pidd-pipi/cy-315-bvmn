@@ -72,6 +72,18 @@ definitions:
     - duration
     - name
     type: object
+  github_com_gbschedule_gbschedule_internal_dto.CreateScheduleDraftRequest:
+    properties:
+      created_by:
+        maxLength: 64
+        type: string
+      name:
+        maxLength: 128
+        minLength: 1
+        type: string
+    required:
+    - name
+    type: object
   github_com_gbschedule_gbschedule_internal_dto.CreateTeacherRequest:
     properties:
       contact:
@@ -176,6 +188,15 @@ definitions:
     - schedule_id
     - time_slot_id
     - week
+    type: object
+  github_com_gbschedule_gbschedule_internal_dto.PublishScheduleDraftRequest:
+    properties:
+      published_by:
+        maxLength: 64
+        minLength: 1
+        type: string
+    required:
+    - published_by
     type: object
   github_com_gbschedule_gbschedule_internal_dto.Response:
     properties:
@@ -582,6 +603,154 @@ paths:
       summary: Update a course
       tags:
       - courses
+  /api/v1/schedule-drafts:
+    get:
+      parameters:
+      - description: page
+        in: query
+        name: page
+        type: integer
+      - description: page size
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_gbschedule_gbschedule_internal_dto.Response'
+      summary: List named timetable drafts
+      tags:
+      - schedule-drafts
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: draft payload
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_gbschedule_gbschedule_internal_dto.CreateScheduleDraftRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/github_com_gbschedule_gbschedule_internal_dto.Response'
+        "409":
+          description: draft name already exists
+          schema:
+            $ref: '#/definitions/github_com_gbschedule_gbschedule_internal_dto.Response'
+      summary: Save the current timetable as a named draft
+      tags:
+      - schedule-drafts
+  /api/v1/schedule-drafts/{id}:
+    get:
+      parameters:
+      - description: draft id
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_gbschedule_gbschedule_internal_dto.Response'
+        "404":
+          description: draft not found
+          schema:
+            $ref: '#/definitions/github_com_gbschedule_gbschedule_internal_dto.Response'
+      summary: Get a draft with its full snapshot
+      tags:
+      - schedule-drafts
+  /api/v1/schedule-drafts/{id}/conflicts:
+    get:
+      parameters:
+      - description: draft id
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_gbschedule_gbschedule_internal_dto.Response'
+        "404":
+          description: draft not found
+          schema:
+            $ref: '#/definitions/github_com_gbschedule_gbschedule_internal_dto.Response'
+      summary: Check conflicts inside a draft
+      tags:
+      - schedule-drafts
+  /api/v1/schedule-drafts/{id}/publish:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: draft id
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: publish payload
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_gbschedule_gbschedule_internal_dto.PublishScheduleDraftRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_gbschedule_gbschedule_internal_dto.Response'
+        "404":
+          description: draft not found
+          schema:
+            $ref: '#/definitions/github_com_gbschedule_gbschedule_internal_dto.Response'
+        "409":
+          description: conflicts present, already published or concurrent publish
+          schema:
+            $ref: '#/definitions/github_com_gbschedule_gbschedule_internal_dto.Response'
+      summary: Publish a draft and atomically replace the current timetable
+      tags:
+      - schedule-drafts
+  /api/v1/schedule-publishes:
+    get:
+      parameters:
+      - description: filter by draft id
+        in: query
+        name: draft_id
+        type: integer
+      - description: page
+        in: query
+        name: page
+        type: integer
+      - description: page size
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_gbschedule_gbschedule_internal_dto.Response'
+      summary: List publish audit records
+      tags:
+      - schedule-drafts
   /api/v1/schedules:
     get:
       parameters:

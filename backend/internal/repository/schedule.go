@@ -105,3 +105,26 @@ func (r *scheduleRepository) DeleteAll(ctx context.Context) error {
 	}
 	return nil
 }
+
+// ReplaceSchedulesInTx atomically removes every current timetable entry and
+// inserts the given items using the supplied transaction. It must be called
+// from within an existing *gorm.DB transaction. On success the inserted rows
+// carry their generated primary keys in-place (rows with a pre-set ID are
+// re-keyed explicitly to avoid colliding with soft-deleted rows).
+func ReplaceSchedulesInTx(tx *gorm.DB, schedules []model.Schedule) error {
+	if err := tx.Where("1 = 1").Delete(&model.Schedule{}).Error; err != nil {
+		return fmt.Errorf("delete all schedules: %w", err)
+	}
+	if len(schedules) == 0 {
+		return nil
+	}
+	// Soft-deleted rows keep their primary keys and SQLite reuses freed
+	// rowids, so incoming snapshot IDs must never be reused as real IDs.
+	for i := range schedules {
+		schedules[i].ID = 0
+	}
+	if err := tx.CreateInBatches(schedules, 200).Error; err != nil {
+		return fmt.Errorf("insert schedules: %w", err)
+	}
+	return nil
+}
