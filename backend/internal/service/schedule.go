@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"sort"
+	"sync"
 
 	"github.com/gbschedule/gbschedule/internal/constants"
 	"github.com/gbschedule/gbschedule/internal/dto"
@@ -26,6 +27,10 @@ type ScheduleService interface {
 	ClassroomUtilization(ctx context.Context) ([]dto.ClassroomUtilizationItem, error)
 	TeacherWorkload(ctx context.Context) ([]dto.TeacherWorkloadItem, error)
 	CourseDensity(ctx context.Context) ([]dto.CourseDensityItem, error)
+	SaveDraft(ctx context.Context, req *dto.SaveDraftRequest) (*dto.DraftResponse, error)
+	ListDrafts(ctx context.Context, page, pageSize int) ([]dto.DraftResponse, int64, error)
+	GetDraft(ctx context.Context, id uint) (*dto.DraftDetailResponse, error)
+	PublishDraft(ctx context.Context, id uint, req *dto.PublishDraftRequest) (*dto.PublishDraftResponse, error)
 }
 
 type scheduleService struct {
@@ -36,6 +41,8 @@ type scheduleService struct {
 	courses     repository.CourseRepository
 	timeSlots   repository.TimeSlotRepository
 	adjustments repository.AdjustmentLogRepository
+	drafts      repository.ScheduleDraftRepository
+	publishMu   sync.Mutex
 	logger      *slog.Logger
 }
 
@@ -48,6 +55,7 @@ func NewScheduleService(
 	courses repository.CourseRepository,
 	timeSlots repository.TimeSlotRepository,
 	adjustments repository.AdjustmentLogRepository,
+	drafts repository.ScheduleDraftRepository,
 	logger *slog.Logger,
 ) ScheduleService {
 	return &scheduleService{
@@ -58,6 +66,7 @@ func NewScheduleService(
 		courses:     courses,
 		timeSlots:   timeSlots,
 		adjustments: adjustments,
+		drafts:      drafts,
 		logger:      logger,
 	}
 }

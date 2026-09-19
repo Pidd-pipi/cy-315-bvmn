@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -87,7 +88,17 @@ func openDatabase(path string) (*gorm.DB, error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return nil, fmt.Errorf("create db dir: %w", err)
 	}
-	db, err := gorm.Open(sqlite.Open(path), &gorm.Config{
+	dsn := path
+	if !strings.Contains(dsn, "_pragma=") {
+		sep := "?"
+		if strings.Contains(dsn, "?") {
+			sep = "&"
+		}
+		// Serialize concurrent writers instead of failing with SQLITE_BUSY;
+		// draft publishing relies on this for clean compare-and-swap semantics.
+		dsn = fmt.Sprintf("%s%s_pragma=busy_timeout(5000)", dsn, sep)
+	}
+	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{
 		Logger:         gormlogger.Default.LogMode(gormlogger.Silent),
 		TranslateError: true,
 	})
@@ -106,6 +117,8 @@ func migrate(db *gorm.DB) error {
 		&model.TimeSlot{},
 		&model.Schedule{},
 		&model.AdjustmentLog{},
+		&model.ScheduleDraft{},
+		&model.ScheduleDraftEntry{},
 	); err != nil {
 		return fmt.Errorf("auto migrate: %w", err)
 	}
@@ -120,13 +133,14 @@ func newApp(db *gorm.DB, logger *slog.Logger) (*gin.Engine, error) {
 	timeSlotRepo := repository.NewTimeSlotRepository(db)
 	scheduleRepo := repository.NewScheduleRepository(db)
 	adjustmentRepo := repository.NewAdjustmentLogRepository(db)
+	draftRepo := repository.NewScheduleDraftRepository(db)
 
 	classroomService := service.NewClassroomService(classroomRepo, logger)
 	teacherService := service.NewTeacherService(teacherRepo, logger)
 	classService := service.NewClassService(classRepo, logger)
 	courseService := service.NewCourseService(courseRepo, logger)
 	timeSlotService := service.NewTimeSlotService(timeSlotRepo, logger)
-	scheduleService := service.NewScheduleService(scheduleRepo, classroomRepo, teacherRepo, classRepo, courseRepo, timeSlotRepo, adjustmentRepo, logger)
+	scheduleService := service.NewScheduleService(scheduleRepo, classroomRepo, teacherRepo, classRepo, courseRepo, timeSlotRepo, adjustmentRepo, draftRepo, logger)
 
 	h := router.Handlers{
 		Classroom:  handler.NewClassroomHandler(classroomService, logger),

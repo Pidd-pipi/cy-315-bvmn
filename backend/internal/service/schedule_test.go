@@ -23,7 +23,7 @@ func newScheduleTestDB(t *testing.T) *gorm.DB {
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}
-	if err := db.AutoMigrate(&model.Classroom{}, &model.Teacher{}, &model.Class{}, &model.Course{}, &model.TimeSlot{}, &model.Schedule{}, &model.AdjustmentLog{}); err != nil {
+	if err := db.AutoMigrate(&model.Classroom{}, &model.Teacher{}, &model.Class{}, &model.Course{}, &model.TimeSlot{}, &model.Schedule{}, &model.AdjustmentLog{}, &model.ScheduleDraft{}, &model.ScheduleDraftEntry{}); err != nil {
 		t.Fatalf("migrate db: %v", err)
 	}
 	return db
@@ -39,6 +39,7 @@ func newScheduleService(t *testing.T, db *gorm.DB) service.ScheduleService {
 		repository.NewCourseRepository(db),
 		repository.NewTimeSlotRepository(db),
 		repository.NewAdjustmentLogRepository(db),
+		repository.NewScheduleDraftRepository(db),
 		logger,
 	)
 }

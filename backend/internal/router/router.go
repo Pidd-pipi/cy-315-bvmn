@@ -87,6 +87,10 @@ func New(h Handlers, logger *slog.Logger) *gin.Engine {
 			schedules.GET("/export", h.Schedule.Export)
 			schedules.POST("/swap", h.Schedule.Swap)
 			schedules.POST("/move", h.Schedule.Move)
+			schedules.POST("/drafts", h.Schedule.SaveDraft)
+			schedules.GET("/drafts", h.Schedule.ListDrafts)
+			schedules.GET("/drafts/:id", h.Schedule.GetDraft)
+			schedules.POST("/drafts/:id/publish", h.Schedule.PublishDraft)
 			schedules.GET("/:id", h.Schedule.Get)
 		}
 		statistics := api.Group("/statistics")
